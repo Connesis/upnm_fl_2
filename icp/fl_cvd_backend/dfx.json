@@ -1,0 +1,26 @@
+{
+  "canisters": {
+    "fl_cvd_backend_backend": {
+      "main": "src/fl_cvd_backend_backend/main.mo",
+      "type": "motoko"
+    },
+    "fl_cvd_backend_frontend": {
+      "dependencies": [
+        "fl_cvd_backend_backend"
+      ],
+      "source": [
+        "src/fl_cvd_backend_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "fl_cvd_backend_frontend"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
