@@ -1,4 +1,4 @@
-# Qwen Code - Federated Learning System for CVD Prediction
+# Federated Learning System for CVD Prediction
 
 ## Project Overview
 This project implements a federated learning system using scikit-learn's Random Forest, Flower AI, and ICP smart contracts to predict cardiovascular disease (CVD) while preserving data privacy.

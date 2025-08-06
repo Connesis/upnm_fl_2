@@ -134,7 +134,7 @@ class AuthenticatedICPClient(ICPClient):
         """Set server principal (admin only)."""
         if self.identity_type != "admin":
             return False
-        
+
         try:
             result = self._call_canister("admin_set_server", f'(principal "{server_principal}")')
             return "true" in str(result).lower()

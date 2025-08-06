@@ -144,12 +144,12 @@ actor FL_CVD_Backend {
     };
 
     // Admin functions
-    public shared(msg) func admin_set_server(serverPrincipal: Principal) : async Bool {
+    public shared(msg) func admin_set_server(serverPrincipalId: Principal) : async Bool {
         if (not hasRole(msg.caller, #Admin)) {
             return false;
         };
-        roles.put(serverPrincipal, #Server);
-        serverPrincipal := ?serverPrincipal;
+        roles.put(serverPrincipalId, #Server);
+        serverPrincipal := ?serverPrincipalId;
         return true;
     };
 
