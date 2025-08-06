@@ -6,6 +6,7 @@ import os
 import sys
 import pandas as pd
 import numpy as np
+import logging
 from typing import Tuple, Dict, Any, List
 from dotenv import load_dotenv
 
@@ -15,6 +16,16 @@ from utils.model import CVDModel
 # Add ICP client
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from icp_auth_client import AuthenticatedICPClient
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 class CVDClient(fl.client.NumPyClient):
@@ -33,19 +44,26 @@ class CVDClient(fl.client.NumPyClient):
         self.X = X
         self.y = y
 
+        # Get client identity from environment
+        self.client_identity = os.getenv("ICP_CLIENT_IDENTITY_NAME", "unknown_client")
+        logger.info(f"🔗 Initializing client with identity: {self.client_identity}")
+
         # Initialize authenticated ICP client
         try:
             self.icp_client = AuthenticatedICPClient(identity_type="client")
             if self.icp_client.canister_id:
-                print(f"Connected to ICP canister: {self.icp_client.canister_id}")
+                logger.info(f"✅ Connected to ICP canister: {self.icp_client.canister_id}")
 
                 # Get client metadata from environment
-                client_name = os.getenv("CLIENT_NAME", "Unknown Client")
-                organization = os.getenv("CLIENT_ORGANIZATION", "Unknown Organization")
+                client_name = os.getenv("CLIENT_NAME", f"FL Client ({self.client_identity})")
+                organization = os.getenv("CLIENT_ORGANIZATION", "Federated Learning Network")
                 location = os.getenv("CLIENT_LOCATION", "Unknown Location")
                 contact_email = os.getenv("CLIENT_CONTACT_EMAIL", "unknown@example.com")
 
+                logger.info(f"📋 Client metadata: {client_name} from {organization}")
+
                 # Register client with ICP (will be in pending status)
+                logger.info("🔄 Registering with ICP blockchain...")
                 status = self.icp_client.register_client_with_metadata(
                     client_name=client_name,
                     organization=organization,
@@ -97,7 +115,10 @@ class CVDClient(fl.client.NumPyClient):
         Returns:
             Tuple of (parameters, num_examples, metrics)
         """
-        print(f"Starting local training round {config.get('server_round', 'unknown')}...")
+        round_num = config.get('server_round', 'unknown')
+        logger.info(f"🏋️ Starting training round {round_num}")
+        logger.info(f"   📊 Training data shape: {self.X.shape}")
+        logger.info(f"   🎯 Target distribution: {self.y.value_counts().to_dict()}")
 
         # Set parameters if provided (not first round)
         if len(parameters) >= 1 and len(parameters[0]) > 0:

@@ -350,9 +350,13 @@ class FederatedLearningOrchestrator:
         self.shutdown_requested = False
 
     def start_server(self, rounds: int, port: int = 8080) -> bool:
-        """Start the federated learning server."""
+        """Start the federated learning server with fl_server identity."""
         try:
-            print(f"🚀 Starting Flower server (rounds: {rounds}, port: {port})...")
+            print(f"🚀 Starting Flower server with fl_server identity (rounds: {rounds}, port: {port})...")
+
+            # Set environment variable for server identity
+            env = os.environ.copy()
+            env["ICP_CLIENT_IDENTITY_NAME"] = "fl_server"
 
             cmd = [
                 "uv", "run", "python", "server/server.py",
@@ -365,7 +369,8 @@ class FederatedLearningOrchestrator:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
+                env=env
             )
 
             # Wait a moment for server to start
@@ -379,7 +384,7 @@ class FederatedLearningOrchestrator:
                 print(f"   STDERR: {stderr}")
                 return False
 
-            print("✅ Server started successfully")
+            print("✅ Server started successfully with fl_server identity")
             return True
 
         except Exception as e:
@@ -414,15 +419,20 @@ class FederatedLearningOrchestrator:
         return False
 
     def start_clients(self, client_datasets: List[str], delay: float = 1.0) -> bool:
-        """Start federated learning clients."""
-        print(f"👥 Starting {len(client_datasets)} clients...")
+        """Start federated learning clients with proper identity management."""
+        print(f"👥 Starting {len(client_datasets)} clients with identity management...")
 
         for i, dataset in enumerate(client_datasets, 1):
             if self.shutdown_requested:
                 return False
 
             try:
-                print(f"   🔄 Starting client {i} with dataset: {dataset}")
+                identity_name = f"fl_client_{i}"
+                print(f"   🔄 Starting client {i} with identity {identity_name} and dataset: {dataset}")
+
+                # Set environment variable for client identity
+                env = os.environ.copy()
+                env["ICP_CLIENT_IDENTITY_NAME"] = identity_name
 
                 cmd = [
                     "uv", "run", "python", "client/client.py",
@@ -433,10 +443,12 @@ class FederatedLearningOrchestrator:
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True
+                    text=True,
+                    env=env
                 )
 
                 self.client_processes.append(process)
+                print(f"   ✅ Client {i} started with identity: {identity_name}")
 
                 # Small delay between starting clients
                 if delay > 0:
@@ -446,7 +458,7 @@ class FederatedLearningOrchestrator:
                 print(f"   ❌ Failed to start client {i}: {e}")
                 return False
 
-        print(f"✅ All {len(client_datasets)} clients started")
+        print(f"✅ All {len(client_datasets)} clients started with their respective identities")
         return True
 
     def monitor_training(self) -> bool:

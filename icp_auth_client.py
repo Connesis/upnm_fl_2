@@ -58,6 +58,35 @@ class AuthenticatedICPClient(ICPClient):
         # Initialize base client
         super().__init__(canister_name, dfx_path, icp_project_dir)
 
+    def _call_canister(self, method: str, args: str = "") -> Dict[str, Any]:
+        """
+        Call a canister method with specific identity and return the result.
+
+        Args:
+            method: The method name to call
+            args: Arguments to pass to the method
+
+        Returns:
+            Parsed result from the canister call
+        """
+        cmd = [self.dfx_path, "canister", "call"]
+
+        # Add identity parameter if we have an identity name
+        if self.identity_name:
+            cmd.extend(["--identity", self.identity_name])
+
+        cmd.extend([self.canister_name, method])
+        if args:
+            cmd.append(args)
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=self.icp_project_dir)
+            # Parse the Candid output (simplified parsing)
+            output = result.stdout.strip()
+            return self._parse_candid_output(output)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Canister call failed with identity {self.identity_name}: {e.stderr}")
+
     def _load_credentials(self):
         """Load credentials from environment variables based on identity type."""
         if self.identity_type == "admin":
@@ -74,7 +103,7 @@ class AuthenticatedICPClient(ICPClient):
             self.identity_name = os.getenv("ICP_CLIENT_IDENTITY_NAME", "client")
 
     def _setup_dfx_identity(self):
-        """Set up dfx identity for authenticated calls."""
+        """Verify dfx identity exists (no need to switch globally)."""
         try:
             # Check if identity already exists
             result = subprocess.run(
@@ -83,32 +112,30 @@ class AuthenticatedICPClient(ICPClient):
                 text=True,
                 cwd=self.icp_project_dir
             )
-            
+
             if self.identity_name not in result.stdout:
                 print(f"⚠️  Identity '{self.identity_name}' not found. Please create it manually:")
                 print(f"   dfx identity new {self.identity_name} --storage-mode password-protected")
-                print(f"   dfx identity use {self.identity_name}")
                 return False
-            
-            # Use the specified identity
-            subprocess.run(
-                [self.dfx_path, "identity", "use", self.identity_name],
-                capture_output=True,
-                text=True,
-                cwd=self.icp_project_dir
-            )
-            
+
+            print(f"✅ Identity '{self.identity_name}' verified and ready for use")
             return True
-            
+
         except subprocess.CalledProcessError as e:
-            print(f"⚠️  Failed to set up dfx identity: {e}")
+            print(f"⚠️  Failed to verify dfx identity: {e}")
             return False
 
     def get_current_principal(self) -> Optional[str]:
-        """Get the current principal ID from dfx."""
+        """Get the principal ID for this client's identity."""
         try:
+            cmd = [self.dfx_path, "identity", "get-principal"]
+
+            # Add identity parameter if we have an identity name
+            if self.identity_name:
+                cmd.extend(["--identity", self.identity_name])
+
             result = subprocess.run(
-                [self.dfx_path, "identity", "get-principal"],
+                cmd,
                 capture_output=True,
                 text=True,
                 check=True,

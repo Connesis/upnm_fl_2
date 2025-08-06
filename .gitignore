@@ -2,3 +2,5 @@
 uv.lock
 __pycache__/
 models/
+.env
+logs/

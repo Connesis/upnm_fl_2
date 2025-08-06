@@ -29,7 +29,7 @@ from icp_auth_client import AuthenticatedICPClient
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+    format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler()
     ]
@@ -75,10 +75,19 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
         Returns:
             Aggregated parameters and metrics
         """
+        logger.info(f"🔄 Round {server_round}: Starting aggregation")
+        logger.info(f"   📊 Received results from {len(results)} clients")
+
+        if failures:
+            logger.warning(f"   ⚠️  {len(failures)} client failures detected")
+            for i, failure in enumerate(failures):
+                logger.warning(f"      Failure {i+1}: {failure}")
+
         if not results:
+            logger.error("   ❌ No results to aggregate")
             return None, {}
 
-        logger.info(f"Aggregating fit results from {len(results)} clients in round {server_round}")
+        logger.info(f"   🔧 Processing client parameters...")
 
         # Extract parameters and weights
         client_trees_list = []
