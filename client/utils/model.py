@@ -13,8 +13,8 @@ from .federated_utils import get_model_parameters, set_model_parameters
 class CVDModel:
     """Random Forest model for cardiovascular disease prediction."""
     
-    def __init__(self, 
-                 n_estimators: int = 100,
+    def __init__(self,
+                 n_estimators: int = 100,  # Number of trees per client (configurable)
                  max_depth: int = 10,
                  min_samples_leaf: int = 5,
                  random_state: int = 42):

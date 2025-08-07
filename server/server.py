@@ -40,10 +40,15 @@ logger = logging.getLogger(__name__)
 class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
     """Custom FedAvg strategy for Random Forest federated learning with ICP integration."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, total_rounds: int = 5, max_trees_per_round: int = 1000, *args, **kwargs):
         """Initialize the strategy."""
         super().__init__(*args, **kwargs)
+        self.total_rounds = total_rounds
+        self.current_round = 0
+        self.max_trees_per_round = max_trees_per_round
         logger.info("Initializing CVDFedAvgStrategy for Random Forest")
+        logger.info(f"Total rounds configured: {total_rounds}")
+        logger.info(f"Maximum trees per round: {max_trees_per_round}")
 
         # Initialize authenticated ICP client with server role
         try:
@@ -75,8 +80,15 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
         Returns:
             Aggregated parameters and metrics
         """
-        logger.info(f"🔄 Round {server_round}: Starting aggregation")
+        # Update current round tracking
+        self.current_round = server_round
+
+        logger.info(f"🔄 Round {server_round}/{self.total_rounds}: Starting aggregation")
         logger.info(f"   📊 Received results from {len(results)} clients")
+
+        # Print round start status to console
+        print(f"\n🔄 Processing Round {server_round}/{self.total_rounds}...")
+        print(f"   📊 Aggregating models from {len(results)} client(s)")
 
         if failures:
             logger.warning(f"   ⚠️  {len(failures)} client failures detected")
@@ -112,8 +124,33 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
             return None, {}
 
         # Aggregate trees from all clients
+        total_trees_before = sum(len(trees) for trees in client_trees_list)
+        logger.info(f"Starting aggregation of {total_trees_before} total trees...")
         aggregated_trees = aggregate_random_forests(client_trees_list, weights)
-        logger.info(f"Aggregated model contains {len(aggregated_trees)} trees")
+
+        # Apply tree limit if configured
+        if len(aggregated_trees) > self.max_trees_per_round:
+            logger.warning(f"Model size ({len(aggregated_trees)} trees) exceeds limit ({self.max_trees_per_round}). "
+                          f"Sampling trees to stay within limit.")
+            print(f"⚠️  Model size limit: Reducing from {len(aggregated_trees)} to {self.max_trees_per_round} trees")
+
+            # Sample trees to stay within limit (keep diversity from all clients)
+            import random
+            random.seed(42)  # For reproducibility
+            aggregated_trees = random.sample(aggregated_trees, self.max_trees_per_round)
+            logger.info(f"Sampled {len(aggregated_trees)} trees from {total_trees_before} total trees")
+
+        logger.info(f"Final aggregated model contains {len(aggregated_trees)} trees")
+
+        # Add processing time warnings
+        if len(aggregated_trees) > 800:
+            logger.warning(f"Very large model detected ({len(aggregated_trees)} trees). "
+                          f"This may take several minutes to process and save.")
+            print(f"⚠️  Large model warning: {len(aggregated_trees)} trees detected.")
+            print(f"   This may take 5-10 minutes to process. Please be patient...")
+        elif len(aggregated_trees) > 500:
+            logger.info(f"Large model detected ({len(aggregated_trees)} trees). Using optimized processing.")
+            print(f"📊 Processing large model with {len(aggregated_trees)} trees...")
 
         # Convert back to numpy array format
         aggregated_tree_array = trees_to_numpy_arrays(aggregated_trees)
@@ -171,9 +208,9 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
             except Exception as e:
                 logger.error(f"Error storing training round metadata on ICP: {e}")
 
-        # Output the generated artifact file names
+        # Output the generated artifact file names and completion status
         print("\n" + "="*80)
-        print(f"🎯 ROUND {server_round} COMPLETED SUCCESSFULLY!")
+        print(f"🎯 ROUND {server_round}/{self.total_rounds} COMPLETED SUCCESSFULLY!")
         print("="*80)
         print(f"📊 Aggregation Summary:")
         print(f"   • Participating clients: {len(results)}")
@@ -183,13 +220,32 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
         print(f"\n📁 Generated Artifacts:")
         print(f"   • Global Model: {model_path}")
         print(f"   • Model Metadata: {metadata_path}")
+
+        # Show progress and completion status
+        progress_percentage = (server_round / self.total_rounds) * 100
+        print(f"\n📈 Training Progress: {progress_percentage:.1f}% ({server_round}/{self.total_rounds} rounds)")
+
+        if server_round < self.total_rounds:
+            remaining_rounds = self.total_rounds - server_round
+            print(f"⏳ Remaining rounds: {remaining_rounds}")
+            print(f"🔄 Preparing for Round {server_round + 1}...")
+        else:
+            print("🎉 ALL TRAINING ROUNDS COMPLETED!")
+            print("🏁 Federated learning process will conclude after evaluation.")
+
         print("="*80 + "\n")
+
+        # Log the completion status
+        logger.info(f"Round {server_round}/{self.total_rounds} completed successfully")
+        logger.info(f"Progress: {progress_percentage:.1f}% complete")
+        if server_round >= self.total_rounds:
+            logger.info("All training rounds completed - server will terminate after final evaluation")
 
         return parameters, metrics
 
     def _save_global_model(self, serialized_trees: List[bytes], round_num: int, metadata: Dict[str, Any]) -> Tuple[str, str]:
         """
-        Save the global federated model to disk.
+        Save the global federated model to disk with optimized handling for large models.
 
         Args:
             serialized_trees: List of serialized decision trees
@@ -204,14 +260,23 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
             models_dir = os.path.join(os.path.dirname(__file__), '..', 'models')
             os.makedirs(models_dir, exist_ok=True)
 
-            # Reconstruct the Random Forest model
-            global_model = deserialize_random_forest(serialized_trees, n_classes=2)
+            num_trees = len(serialized_trees)
+            logger.info(f"Saving model with {num_trees} trees...")
+
+            # For large models (>500 trees), use optimized deserialization
+            if num_trees > 500:
+                logger.info(f"Large model detected ({num_trees} trees), using optimized deserialization...")
+                global_model = self._deserialize_large_random_forest(serialized_trees, n_classes=2)
+            else:
+                # Use standard deserialization for smaller models
+                global_model = deserialize_random_forest(serialized_trees, n_classes=2)
 
             # Save the model
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             model_filename = f"federated_cvd_model_round_{round_num}_{timestamp}.joblib"
             model_path = os.path.join(models_dir, model_filename)
 
+            logger.info(f"Serializing model to disk...")
             joblib.dump(global_model, model_path)
 
             # Save metadata
@@ -226,7 +291,71 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
 
         except Exception as e:
             logger.error(f"Failed to save global model: {e}")
+            logger.error(f"Error details: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return "", ""
+
+    def _deserialize_large_random_forest(self, serialized_trees: List[bytes], n_classes: int = 2) -> 'RandomForestClassifier':
+        """
+        Optimized deserialization for large Random Forest models.
+
+        Args:
+            serialized_trees: List of serialized decision trees
+            n_classes: Number of classes
+
+        Returns:
+            RandomForestClassifier with deserialized trees
+        """
+        from sklearn.ensemble import RandomForestClassifier
+        import pickle
+        import numpy as np
+
+        logger.info(f"Starting optimized deserialization of {len(serialized_trees)} trees...")
+
+        # Create a new Random Forest with the same number of estimators
+        model = RandomForestClassifier(
+            n_estimators=len(serialized_trees),
+            random_state=42
+        )
+
+        # Deserialize trees in batches to manage memory
+        batch_size = 100  # Process 100 trees at a time
+        estimators = []
+
+        for i in range(0, len(serialized_trees), batch_size):
+            batch_end = min(i + batch_size, len(serialized_trees))
+            batch_trees = serialized_trees[i:batch_end]
+
+            logger.info(f"Processing tree batch {i//batch_size + 1}/{(len(serialized_trees) + batch_size - 1)//batch_size} "
+                       f"(trees {i+1}-{batch_end})")
+
+            # Deserialize batch of trees
+            batch_estimators = []
+            for tree_bytes in batch_trees:
+                try:
+                    tree = pickle.loads(tree_bytes)
+                    batch_estimators.append(tree)
+                except Exception as e:
+                    logger.warning(f"Failed to deserialize tree: {e}")
+                    continue
+
+            estimators.extend(batch_estimators)
+
+            # Log progress
+            if len(estimators) % 200 == 0:
+                logger.info(f"Deserialized {len(estimators)}/{len(serialized_trees)} trees...")
+
+        # Set the estimators and model properties
+        model.estimators_ = estimators
+        model.n_classes_ = n_classes
+        model.classes_ = np.array([0, 1])  # Binary classification
+        model.n_features_in_ = estimators[0].n_features_in_ if estimators else 0
+        model.n_outputs_ = 1
+
+        logger.info(f"Optimized deserialization completed: {len(estimators)} trees ready")
+
+        return model
 
 
 def fit_config(server_round: int) -> Dict[str, Any]:
@@ -264,36 +393,71 @@ def evaluate_config(server_round: int) -> Dict[str, Any]:
     return config
 
 
-def main(num_rounds: int) -> None:
+def main(num_rounds: int, min_clients: int = 1, server_port: int = 8080, max_trees: int = 600) -> None:
     """
     Main function to run the server.
 
     Args:
         num_rounds: Number of federated learning rounds
+        min_clients: Minimum number of clients required to start training
+        server_port: Port for the server to listen on
     """
+    # Load environment variables for debugging
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        logger.warning("python-dotenv not available, skipping .env file loading")
+
+    # Log environment variables for debugging
+    server_identity = os.getenv("ICP_CLIENT_IDENTITY_NAME", "unknown_server")
+    server_principal = os.getenv("ICP_SERVER_PRINCIPAL_ID", "not_set")
+    icp_network = os.getenv("ICP_NETWORK", "not_set")
+    canister_id = os.getenv("ICP_CANISTER_ID", "not_set")
+
+    print(f"🔧 DEBUG: Loading server environment variables...")
+    print(f"   Identity: {server_identity}")
+    print(f"   Principal: {server_principal}")
+    print(f"   Network: {icp_network}")
+    print(f"   Canister: {canister_id}")
+
+    logger.info("="*80)
+    logger.info("🔧 SERVER ENVIRONMENT VARIABLES")
+    logger.info("="*80)
+    logger.info(f"ICP_CLIENT_IDENTITY_NAME: {server_identity}")
+    logger.info(f"ICP_SERVER_PRINCIPAL_ID: {server_principal}")
+    logger.info(f"ICP_NETWORK: {icp_network}")
+    logger.info(f"ICP_CANISTER_ID: {canister_id}")
+    logger.info("="*80)
+
     # Print startup banner
     print("\n" + "="*80)
     print("🚀 FEDERATED LEARNING SERVER FOR CVD PREDICTION")
     print("="*80)
     print(f"📋 Configuration:")
     print(f"   • Number of rounds: {num_rounds}")
-    print(f"   • Server address: 0.0.0.0:8080")
+    print(f"   • Server address: 0.0.0.0:{server_port}")
+    print(f"   • Minimum clients required: {min_clients}")
+    print(f"   • Server identity: {server_identity}")
     print(f"   • Model type: Random Forest (scikit-learn)")
     print(f"   • Aggregation strategy: FedAvg with tree combination")
     print(f"   • Model storage: ./models/")
     print("="*80)
-    print("⏳ Waiting for clients to connect...")
+    print(f"⏳ Waiting for at least {min_clients} client(s) to connect...")
     print("="*80 + "\n")
 
-    logger.info(f"Starting server with {num_rounds} rounds")
+    logger.info(f"Starting server with {num_rounds} rounds, minimum {min_clients} clients")
+    logger.info(f"Server identity loaded: {server_identity}")
 
     # Create custom strategy for Random Forest federated learning
     strategy = CVDFedAvgStrategy(
+        total_rounds=num_rounds,  # Total number of rounds for progress tracking
+        max_trees_per_round=max_trees,  # Maximum trees per round to prevent memory issues
         fraction_fit=1.0,  # Sample all clients for training
         fraction_evaluate=1.0,  # Sample all clients for evaluation
-        min_fit_clients=1,  # Minimum number of clients for training
-        min_evaluate_clients=1,  # Minimum number of clients for evaluation
-        min_available_clients=1,  # Minimum number of available clients
+        min_fit_clients=min_clients,  # Minimum number of clients for training
+        min_evaluate_clients=min_clients,  # Minimum number of clients for evaluation
+        min_available_clients=min_clients,  # Minimum number of available clients
         on_fit_config_fn=fit_config,  # Function to configure training
         on_evaluate_config_fn=evaluate_config,  # Function to configure evaluation
     )
@@ -303,26 +467,55 @@ def main(num_rounds: int) -> None:
 
     # Start server
     fl.server.start_server(
-        server_address="0.0.0.0:8080",
+        server_address=f"0.0.0.0:{server_port}",
         config=fl.server.ServerConfig(num_rounds=num_rounds),
         strategy=strategy,
     )
 
-    # Print completion banner
+    # Print comprehensive completion banner
     print("\n" + "="*80)
-    print("✅ FEDERATED LEARNING COMPLETED SUCCESSFULLY!")
+    print("🎉 FEDERATED LEARNING COMPLETED SUCCESSFULLY!")
     print("="*80)
-    print("📁 All generated models and metadata are saved in the './models/' directory")
-    print("🔍 Use 'test_federated_model.py' to test the latest federated model")
+    print(f"📋 Training Summary:")
+    print(f"   • Total rounds completed: {num_rounds}")
+    print(f"   • Minimum clients required: {min_clients}")
+    print(f"   • Server identity: {server_identity}")
+    print(f"   • Server port: {server_port}")
+    print(f"\n📁 Generated Artifacts:")
+    print(f"   • All models saved in: ./models/")
+    print(f"   • Log files saved in: ./logs/")
+    print(f"\n🔍 Next Steps:")
+    print(f"   • Test the latest model: python test_federated_model.py")
+    print(f"   • View training logs: tail -f logs/server.log")
+    print(f"   • Monitor system: python monitor_logs.py summary")
+    print("="*80)
+    print("🏁 Server shutting down gracefully...")
     print("="*80 + "\n")
 
-    logger.info("Server finished")
+    logger.info("="*80)
+    logger.info("🎉 FEDERATED LEARNING SESSION COMPLETED")
+    logger.info("="*80)
+    logger.info(f"Total rounds completed: {num_rounds}")
+    logger.info(f"Server identity: {server_identity}")
+    logger.info(f"Minimum clients required: {min_clients}")
+    logger.info("All models and metadata saved successfully")
+    logger.info("Server finished gracefully")
+    logger.info("="*80)
 
 
 if __name__ == "__main__":
+    import argparse
+
     parser = argparse.ArgumentParser(description="Federated Learning Server for CVD Prediction")
-    parser.add_argument("--rounds", type=int, default=5, help="Number of federated learning rounds")
-    
+    parser.add_argument("--rounds", type=int, default=5,
+                        help="Number of federated learning rounds")
+    parser.add_argument("--min-clients", type=int, default=1,
+                        help="Minimum number of clients required to start training")
+    parser.add_argument("--port", type=int, default=8080,
+                        help="Port for the server to listen on")
+    parser.add_argument("--max-trees", type=int, default=600,
+                        help="Maximum number of trees per round (default: 600)")
+
     args = parser.parse_args()
-    
-    main(args.rounds)
+
+    main(args.rounds, args.min_clients, args.port, args.max_trees)

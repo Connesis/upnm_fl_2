@@ -7,6 +7,8 @@ import sys
 import pandas as pd
 import numpy as np
 import logging
+import time
+import socket
 from typing import Tuple, Dict, Any, List
 from dotenv import load_dotenv
 
@@ -26,6 +28,71 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+def check_server_availability(host: str, port: int, timeout: int = 5) -> bool:
+    """
+    Check if the server is available and accepting connections.
+
+    Args:
+        host: Server hostname or IP address
+        port: Server port number
+        timeout: Connection timeout in seconds
+
+    Returns:
+        True if server is available, False otherwise
+    """
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except (socket.error, socket.timeout):
+        return False
+
+
+def wait_for_server(server_address: str, max_wait_time: int = 300, retry_interval: int = 5) -> bool:
+    """
+    Wait for the server to become available with exponential backoff.
+
+    Args:
+        server_address: Server address in format "host:port"
+        max_wait_time: Maximum time to wait in seconds
+        retry_interval: Initial retry interval in seconds
+
+    Returns:
+        True if server becomes available, False if timeout
+    """
+    try:
+        host, port_str = server_address.split(':')
+        port = int(port_str)
+    except ValueError:
+        logger.error(f"Invalid server address format: {server_address}")
+        return False
+
+    start_time = time.time()
+    current_interval = retry_interval
+    attempt = 1
+
+    logger.info(f"🔍 Checking server availability at {server_address}...")
+
+    while time.time() - start_time < max_wait_time:
+        if check_server_availability(host, port):
+            logger.info(f"✅ Server is available at {server_address}")
+            return True
+
+        elapsed = int(time.time() - start_time)
+        remaining = max_wait_time - elapsed
+
+        logger.info(f"⏳ Attempt {attempt}: Server not ready. Waiting {current_interval}s... "
+                   f"(elapsed: {elapsed}s, remaining: {remaining}s)")
+
+        time.sleep(current_interval)
+
+        # Exponential backoff with maximum interval of 30 seconds
+        current_interval = min(current_interval * 1.5, 30)
+        attempt += 1
+
+    logger.error(f"❌ Server at {server_address} did not become available within {max_wait_time} seconds")
+    return False
 
 
 class CVDClient(fl.client.NumPyClient):
@@ -166,39 +233,84 @@ class CVDClient(fl.client.NumPyClient):
         return loss, len(self.X), metrics
 
 
-def main(dataset_path: str) -> None:
+def main(dataset_path: str, max_wait_time: int = 300, retry_interval: int = 5, n_estimators: int = 100) -> None:
     """
     Main function to run the client.
-    
+
     Args:
         dataset_path: Path to the dataset CSV file
+        max_wait_time: Maximum time to wait for server in seconds
+        retry_interval: Initial retry interval in seconds
     """
     # Load environment variables
     load_dotenv()
-    
+
+    # Log environment variables for debugging
+    client_identity = os.getenv("ICP_CLIENT_IDENTITY_NAME", "unknown_client")
+    client_principal = os.getenv("ICP_CLIENT_PRINCIPAL_ID", "not_set")
+    server_address = os.getenv("SERVER_ADDRESS", "127.0.0.1:8080")
+    icp_network = os.getenv("ICP_NETWORK", "not_set")
+    canister_id = os.getenv("ICP_CANISTER_ID", "not_set")
+    client_name = os.getenv("CLIENT_NAME", f"FL Client ({client_identity})")
+    client_org = os.getenv("CLIENT_ORGANIZATION", "Federated Learning Network")
+
+    logger.info("="*80)
+    logger.info("🔧 CLIENT ENVIRONMENT VARIABLES")
+    logger.info("="*80)
+    logger.info(f"ICP_CLIENT_IDENTITY_NAME: {client_identity}")
+    logger.info(f"ICP_CLIENT_PRINCIPAL_ID: {client_principal}")
+    logger.info(f"SERVER_ADDRESS: {server_address}")
+    logger.info(f"ICP_NETWORK: {icp_network}")
+    logger.info(f"ICP_CANISTER_ID: {canister_id}")
+    logger.info(f"CLIENT_NAME: {client_name}")
+    logger.info(f"CLIENT_ORGANIZATION: {client_org}")
+    logger.info(f"DATASET_PATH: {dataset_path}")
+    logger.info("="*80)
+
     # Load and preprocess data
     X, y = load_and_preprocess_data(dataset_path)
-    
-    # Initialize model
-    model = CVDModel()
-    
+
+    # Initialize model with configurable number of trees
+    logger.info(f"🌳 Initializing model with {n_estimators} trees per client")
+    model = CVDModel(n_estimators=n_estimators)
+
     # Create client
     client = CVDClient(model, X, y)
-    
-    # Get server address from environment or use default
-    server_address = os.getenv("SERVER_ADDRESS", "127.0.0.1:8080")
-    
+
+    # Wait for server to become available
+    logger.info(f"🔍 Attempting to connect to server at {server_address}")
+    logger.info(f"⏱️  Max wait time: {max_wait_time}s, retry interval: {retry_interval}s")
+    print(f"🔍 Waiting for server at {server_address}...")
+    if not wait_for_server(server_address, max_wait_time, retry_interval):
+        error_msg = f"❌ Failed to connect to server at {server_address} within {max_wait_time} seconds"
+        logger.error(error_msg)
+        print(error_msg)
+        print("💡 Make sure the server is running and accessible")
+        return
+
     # Start client
-    print(f"Connecting to server at {server_address}...")
-    fl.client.start_numpy_client(server_address=server_address, client=client)
+    print(f"🚀 Connecting to server at {server_address}...")
+    try:
+        fl.client.start_numpy_client(server_address=server_address, client=client)
+        print("✅ Client session completed successfully")
+    except Exception as e:
+        logger.error(f"❌ Client failed: {e}")
+        print(f"❌ Client failed: {e}")
+        raise
 
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Federated Learning Client for CVD Prediction")
     parser.add_argument("--dataset", type=str, required=True, help="Path to dataset CSV file")
-    
+    parser.add_argument("--max-wait-time", type=int, default=300,
+                        help="Maximum time to wait for server in seconds (default: 300)")
+    parser.add_argument("--retry-interval", type=int, default=5,
+                        help="Initial retry interval in seconds (default: 5)")
+    parser.add_argument("--trees", type=int, default=100,
+                        help="Number of trees per client (default: 100)")
+
     args = parser.parse_args()
-    
-    main(args.dataset)
+
+    main(args.dataset, args.max_wait_time, args.retry_interval, args.trees)

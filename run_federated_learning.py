@@ -12,9 +12,14 @@ def start_server_with_identity():
     """Start the server with fl_server identity."""
     print("🖥️ Starting server with fl_server identity...")
 
-    # Set environment variable for server identity
+    # Set environment variables for server identity and configuration
     env = os.environ.copy()
     env["ICP_CLIENT_IDENTITY_NAME"] = "fl_server"
+    env["ICP_NETWORK"] = env.get("ICP_NETWORK", "local")
+    env["ICP_CANISTER_ID"] = env.get("ICP_CANISTER_ID", "uxrrr-q7777-77774-qaaaq-cai")
+
+    print(f"   🔧 Environment: Identity=fl_server, Network={env['ICP_NETWORK']}")
+    print(f"   🏗️  Canister ID: {env['ICP_CANISTER_ID']}")
 
     # Create server log file
     server_log = open("logs/server.log", "w")
@@ -45,20 +50,32 @@ def start_server_with_identity():
     print("   📝 Server logs: logs/server.log")
     return server_process, server_log
 
-def start_client_with_identity(client_num, dataset):
+def start_client_with_identity(client_num, dataset, trees_per_client=100):
     """Start a client with its specific identity."""
     identity_name = f"fl_client_{client_num}"
     print(f"👤 Starting client {client_num} with {identity_name} identity and dataset {dataset}...")
 
-    # Set environment variable for client identity
+    # Set environment variables for client identity and configuration
     env = os.environ.copy()
     env["ICP_CLIENT_IDENTITY_NAME"] = identity_name
+    env["CLIENT_NAME"] = f"Test Healthcare Provider {client_num}"
+    env["CLIENT_ORGANIZATION"] = f"Test Hospital {client_num}"
+    env["CLIENT_LOCATION"] = f"Test City {client_num}, Test Country"
+    env["CLIENT_CONTACT_EMAIL"] = f"test{client_num}@hospital-test.com"
+    env["FL_DATASET_PATH"] = dataset
+
+    # Ensure server address is set
+    if "SERVER_ADDRESS" not in env:
+        env["SERVER_ADDRESS"] = "127.0.0.1:8080"
+
+    print(f"   🔧 Environment: Identity={identity_name}, Dataset={dataset}")
+    print(f"   🏥 Organization: {env['CLIENT_ORGANIZATION']}")
 
     # Create client log file
     client_log = open(f"logs/client_{client_num}.log", "w")
 
     client_process = subprocess.Popen(
-        ["uv", "run", "python", "client/client.py", "--dataset", dataset],
+        ["uv", "run", "python", "client/client.py", "--dataset", dataset, "--trees", str(trees_per_client)],
         stdout=client_log,
         stderr=subprocess.STDOUT,  # Combine stderr with stdout
         text=True,
@@ -69,7 +86,7 @@ def start_client_with_identity(client_num, dataset):
     print(f"   📝 Client {client_num} logs: logs/client_{client_num}.log")
     return client_process, client_log
 
-def main():
+def main(trees_per_client=100):
     """Main function to start the federated learning process."""
     print("🚀 Starting Federated Learning with Identity Management")
     print("=" * 60)
@@ -95,7 +112,7 @@ def main():
     ]
 
     for client_num, dataset in client_configs:
-        client_result = start_client_with_identity(client_num, dataset)
+        client_result = start_client_with_identity(client_num, dataset, trees_per_client)
         if client_result:
             client_process, client_log = client_result
             client_processes.append((client_num, client_process))
@@ -182,4 +199,11 @@ def main():
     print("=" * 60)
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run Federated Learning with 3 clients")
+    parser.add_argument("--trees", type=int, default=100,
+                        help="Number of trees per client (default: 100)")
+
+    args = parser.parse_args()
+    main(args.trees)
