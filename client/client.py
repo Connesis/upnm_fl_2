@@ -162,7 +162,12 @@ class CVDClient(fl.client.NumPyClient):
                 elif status == "already_registered":
                     print("ℹ️  Client already registered with ICP blockchain")
                     # Check if client is approved
-                    self._verify_client_authentication()
+                    if self._verify_client_authentication():
+                        print("✅ Client is approved and ready for training")
+                        self.is_authenticated = True
+                    else:
+                        print("⚠️  Client is registered but not yet approved")
+                        self.is_authenticated = False
                 else:
                     print("❌ Registration failed")
                     self.is_authenticated = False
@@ -185,14 +190,18 @@ class CVDClient(fl.client.NumPyClient):
             return False
 
         try:
+            logger.info(f"🔍 Verifying authentication for principal: {self.principal_id}")
+
             # Check if client is registered
-            is_registered = self.icp_client.is_client_registered()
+            is_registered = self.icp_client.is_client_registered(self.principal_id)
             if not is_registered:
                 logger.error("❌ Client is not registered in canister")
                 return False
 
+            logger.info("✅ Client is registered in canister")
+
             # Check if client is active (approved)
-            is_active = self.icp_client.is_client_active()
+            is_active = self.icp_client.is_client_active(self.principal_id)
             if not is_active:
                 logger.warning("⚠️  Client is registered but not yet approved")
                 return False
@@ -258,33 +267,45 @@ class CVDClient(fl.client.NumPyClient):
             Tuple of (parameters, num_examples, metrics)
         """
         # Check authentication before training
+        logger.info("🔐 CLIENT AUTHENTICATION CHECK FOR TRAINING")
+        logger.info(f"   🔑 Principal ID: {self.principal_id}")
+        logger.info(f"   👤 Identity: {self.client_identity}")
+
         if not self._check_authentication_before_training():
-            logger.error("❌ Authentication failed. Refusing to participate in training.")
+            logger.error("🔐 CLIENT AUTHENTICATION FAILED")
+            logger.error("   ❌ Authentication failed. Refusing to participate in training.")
+            logger.error("   🚫 TRAINING PARTICIPATION DENIED")
             # Return empty parameters to indicate failure
             return [np.array([])], 0, {
                 "error": "authentication_failed",
                 "client_principal_id": self.principal_id or "unknown"
             }
 
+        logger.info("🔐 CLIENT AUTHENTICATION SUCCESSFUL")
+        logger.info("   ✅ Authentication passed. Proceeding with training.")
+
         round_num = config.get('server_round', 'unknown')
-        logger.info(f"🏋️ Starting training round {round_num}")
+        logger.info(f"🏋️ STARTING TRAINING ROUND {round_num}")
         logger.info(f"   📊 Training data shape: {self.X.shape}")
         logger.info(f"   🎯 Target distribution: {self.y.value_counts().to_dict()}")
         logger.info(f"   🔑 Principal ID: {self.principal_id}")
+        logger.info(f"   👤 Identity: {self.client_identity}")
 
         # Set parameters if provided (not first round)
         if len(parameters) >= 1 and len(parameters[0]) > 0:
-            print("Setting global model parameters...")
+            logger.info("📥 Receiving global model parameters from server...")
             self.model.set_federated_parameters(parameters[0])
 
         # Train on local data
-        print(f"Training on {len(self.X)} local samples...")
+        logger.info(f"🎯 Training on {len(self.X)} local samples...")
         self.model.train(self.X, self.y)
 
         # Get updated parameters
         updated_parameters = self.get_parameters(config)
 
-        print("Local training completed.")
+        logger.info("✅ LOCAL TRAINING COMPLETED")
+        logger.info("📤 Sending parameters and authentication info to server...")
+
         # Include principal ID in metrics for server verification
         return updated_parameters, len(self.X), {
             "client_principal_id": self.principal_id or "unknown",

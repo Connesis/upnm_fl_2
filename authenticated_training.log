@@ -1,0 +1,88 @@
+2025-08-08 14:36:40,845 [INFO] AUTH_TRAINING: 🚀 Authenticated Training Runner Initialized
+2025-08-08 14:36:40,846 [INFO] AUTH_TRAINING:    Canister ID: uxrrr-q7777-77774-qaaaq-cai
+2025-08-08 14:36:40,846 [INFO] AUTH_TRAINING:    Server Identity: fl_server
+2025-08-08 14:36:40,846 [INFO] AUTH_TRAINING:    Client Identities: ['fl_client_1', 'fl_client_2', 'fl_client_3']
+2025-08-08 14:36:40,847 [INFO] AUTH_TRAINING: 🎯 Starting Authenticated Federated Learning
+2025-08-08 14:36:40,847 [INFO] AUTH_TRAINING: ================================================================================
+2025-08-08 14:36:40,847 [INFO] AUTH_TRAINING: This workflow demonstrates:
+2025-08-08 14:36:40,847 [INFO] AUTH_TRAINING:   1. Client principal ID verification
+2025-08-08 14:36:40,847 [INFO] AUTH_TRAINING:   2. Server-side authentication checks
+2025-08-08 14:36:40,847 [INFO] AUTH_TRAINING:   3. Authenticated model aggregation
+2025-08-08 14:36:40,847 [INFO] AUTH_TRAINING: ================================================================================
+2025-08-08 14:36:40,847 [INFO] AUTH_TRAINING: 🔐 Verifying all clients are authenticated...
+2025-08-08 14:36:45,174 [INFO] AUTH_TRAINING:    ✅ fl_client_1: Authenticated (xoqpj-5c7wg-idyjk-i5ply-fetwi-salbi-c5z2t-5nt7k-6xojd-uic3u-3ae)
+2025-08-08 14:36:49,323 [INFO] AUTH_TRAINING:    ✅ fl_client_2: Authenticated (eaxhv-xeqvm-eypy2-y7tmi-hunii-5y6ux-dvq7j-x6k3w-bcb7j-dwwmy-iae)
+2025-08-08 14:36:53,222 [INFO] AUTH_TRAINING:    ✅ fl_client_3: Authenticated (it3pk-ql7f2-ohobl-eqmpy-k45ny-dflvw-olipk-t35ye-pd3bx-lj2dp-fae)
+2025-08-08 14:36:53,223 [INFO] AUTH_TRAINING: 🎉 All clients are authenticated and ready!
+2025-08-08 14:36:53,223 [INFO] AUTH_TRAINING: 🖥️ Starting authenticated federated learning server...
+2025-08-08 14:36:53,232 [INFO] AUTH_TRAINING:    ✅ Server started with PID: 51886
+2025-08-08 14:36:53,233 [INFO] AUTH_TRAINING:    📝 Server logs: logs/server_authenticated.log
+2025-08-08 14:36:53,233 [INFO] AUTH_TRAINING:    🔐 Server will verify each client's principal ID
+2025-08-08 14:36:58,238 [INFO] AUTH_TRAINING: 👥 Starting authenticated federated learning clients...
+2025-08-08 14:36:58,244 [INFO] AUTH_TRAINING:    ✅ Client 1/3 started: fl_client_1 (PID: 51910)
+2025-08-08 14:36:58,244 [INFO] AUTH_TRAINING:       Dataset: dataset/clients/client1_data.csv
+2025-08-08 14:36:58,244 [INFO] AUTH_TRAINING:       Logs: logs/client_1_authenticated.log
+2025-08-08 14:36:58,245 [INFO] AUTH_TRAINING:       🔐 Client will send principal ID for verification
+2025-08-08 14:37:00,255 [INFO] AUTH_TRAINING:    ✅ Client 2/3 started: fl_client_2 (PID: 51927)
+2025-08-08 14:37:00,256 [INFO] AUTH_TRAINING:       Dataset: dataset/clients/client2_data.csv
+2025-08-08 14:37:00,256 [INFO] AUTH_TRAINING:       Logs: logs/client_2_authenticated.log
+2025-08-08 14:37:00,256 [INFO] AUTH_TRAINING:       🔐 Client will send principal ID for verification
+2025-08-08 14:37:02,266 [INFO] AUTH_TRAINING:    ✅ Client 3/3 started: fl_client_3 (PID: 51936)
+2025-08-08 14:37:02,267 [INFO] AUTH_TRAINING:       Dataset: dataset/clients/client3_data.csv
+2025-08-08 14:37:02,267 [INFO] AUTH_TRAINING:       Logs: logs/client_3_authenticated.log
+2025-08-08 14:37:02,267 [INFO] AUTH_TRAINING:       🔐 Client will send principal ID for verification
+2025-08-08 14:37:04,272 [INFO] AUTH_TRAINING: 🎉 All authenticated clients started!
+2025-08-08 14:37:04,273 [INFO] AUTH_TRAINING: 📊 Monitoring authenticated federated learning...
+2025-08-08 14:37:04,273 [INFO] AUTH_TRAINING:    🔐 Server will verify each client's principal ID before aggregation
+2025-08-08 14:37:04,274 [INFO] AUTH_TRAINING:    ⏳ Waiting for training to complete...
+2025-08-08 14:38:21,363 [INFO] AUTH_TRAINING:    ✅ Server process completed
+2025-08-08 14:38:21,364 [INFO] AUTH_TRAINING:    ✅ Client 1/3 process completed
+2025-08-08 14:38:21,364 [INFO] AUTH_TRAINING:    ✅ Client 2/3 process completed
+2025-08-08 14:38:21,365 [INFO] AUTH_TRAINING:    ✅ Client 3/3 process completed
+2025-08-08 14:38:21,365 [INFO] AUTH_TRAINING: 🎉 Authenticated federated learning completed!
+2025-08-08 14:38:21,366 [INFO] AUTH_TRAINING: 🎉 Authenticated training completed successfully!
+2025-08-08 14:38:21,366 [INFO] AUTH_TRAINING: 🧹 Cleaning up processes...
+2025-08-08 14:41:15,222 [INFO] AUTH_TRAINING: 🚀 Authenticated Training Runner Initialized
+2025-08-08 14:41:15,224 [INFO] AUTH_TRAINING:    Canister ID: uxrrr-q7777-77774-qaaaq-cai
+2025-08-08 14:41:15,224 [INFO] AUTH_TRAINING:    Server Identity: fl_server
+2025-08-08 14:41:15,225 [INFO] AUTH_TRAINING:    Client Identities: ['fl_client_1', 'fl_client_2', 'fl_client_3']
+2025-08-08 14:41:15,225 [INFO] AUTH_TRAINING: 🎯 Starting Authenticated Federated Learning
+2025-08-08 14:41:15,226 [INFO] AUTH_TRAINING: ================================================================================
+2025-08-08 14:41:15,226 [INFO] AUTH_TRAINING: This workflow demonstrates:
+2025-08-08 14:41:15,226 [INFO] AUTH_TRAINING:   1. Client principal ID verification
+2025-08-08 14:41:15,227 [INFO] AUTH_TRAINING:   2. Server-side authentication checks
+2025-08-08 14:41:15,227 [INFO] AUTH_TRAINING:   3. Authenticated model aggregation
+2025-08-08 14:41:15,227 [INFO] AUTH_TRAINING: ================================================================================
+2025-08-08 14:41:15,227 [INFO] AUTH_TRAINING: 🔐 Verifying all clients are authenticated...
+2025-08-08 14:41:21,962 [INFO] AUTH_TRAINING:    ✅ fl_client_1: Authenticated (xoqpj-5c7wg-idyjk-i5ply-fetwi-salbi-c5z2t-5nt7k-6xojd-uic3u-3ae)
+2025-08-08 14:41:28,173 [INFO] AUTH_TRAINING:    ✅ fl_client_2: Authenticated (eaxhv-xeqvm-eypy2-y7tmi-hunii-5y6ux-dvq7j-x6k3w-bcb7j-dwwmy-iae)
+2025-08-08 14:41:33,418 [INFO] AUTH_TRAINING:    ✅ fl_client_3: Authenticated (it3pk-ql7f2-ohobl-eqmpy-k45ny-dflvw-olipk-t35ye-pd3bx-lj2dp-fae)
+2025-08-08 14:41:33,419 [INFO] AUTH_TRAINING: 🎉 All clients are authenticated and ready!
+2025-08-08 14:41:33,419 [INFO] AUTH_TRAINING: 🖥️ Starting authenticated federated learning server...
+2025-08-08 14:41:33,428 [INFO] AUTH_TRAINING:    ✅ Server started with PID: 52857
+2025-08-08 14:41:33,429 [INFO] AUTH_TRAINING:    📝 Server logs: logs/server_authenticated.log
+2025-08-08 14:41:33,429 [INFO] AUTH_TRAINING:    🔐 Server will verify each client's principal ID
+2025-08-08 14:41:38,434 [INFO] AUTH_TRAINING: 👥 Starting authenticated federated learning clients...
+2025-08-08 14:41:38,442 [INFO] AUTH_TRAINING:    ✅ Client 1/3 started: fl_client_1 (PID: 52878)
+2025-08-08 14:41:38,443 [INFO] AUTH_TRAINING:       Dataset: dataset/clients/client1_data.csv
+2025-08-08 14:41:38,443 [INFO] AUTH_TRAINING:       Logs: logs/client_1_authenticated.log
+2025-08-08 14:41:38,443 [INFO] AUTH_TRAINING:       🔐 Client will send principal ID for verification
+2025-08-08 14:41:40,449 [INFO] AUTH_TRAINING:    ✅ Client 2/3 started: fl_client_2 (PID: 52894)
+2025-08-08 14:41:40,450 [INFO] AUTH_TRAINING:       Dataset: dataset/clients/client2_data.csv
+2025-08-08 14:41:40,450 [INFO] AUTH_TRAINING:       Logs: logs/client_2_authenticated.log
+2025-08-08 14:41:40,451 [INFO] AUTH_TRAINING:       🔐 Client will send principal ID for verification
+2025-08-08 14:41:42,471 [INFO] AUTH_TRAINING:    ✅ Client 3/3 started: fl_client_3 (PID: 52901)
+2025-08-08 14:41:42,473 [INFO] AUTH_TRAINING:       Dataset: dataset/clients/client3_data.csv
+2025-08-08 14:41:42,473 [INFO] AUTH_TRAINING:       Logs: logs/client_3_authenticated.log
+2025-08-08 14:41:42,473 [INFO] AUTH_TRAINING:       🔐 Client will send principal ID for verification
+2025-08-08 14:41:44,476 [INFO] AUTH_TRAINING: 🎉 All authenticated clients started!
+2025-08-08 14:41:44,476 [INFO] AUTH_TRAINING: 📊 Monitoring authenticated federated learning...
+2025-08-08 14:41:44,477 [INFO] AUTH_TRAINING:    🔐 Server will verify each client's principal ID before aggregation
+2025-08-08 14:41:44,477 [INFO] AUTH_TRAINING:    ⏳ Waiting for training to complete...
+2025-08-08 14:59:31,824 [INFO] AUTH_TRAINING:    ✅ Server process completed
+2025-08-08 14:59:31,835 [INFO] AUTH_TRAINING:    ✅ Client 1/3 process completed
+2025-08-08 14:59:31,987 [INFO] AUTH_TRAINING:    ✅ Client 2/3 process completed
+2025-08-08 14:59:31,988 [INFO] AUTH_TRAINING:    ✅ Client 3/3 process completed
+2025-08-08 14:59:31,988 [INFO] AUTH_TRAINING: 🎉 Authenticated federated learning completed!
+2025-08-08 14:59:31,989 [INFO] AUTH_TRAINING: 🎉 Authenticated training completed successfully!
+2025-08-08 14:59:31,989 [INFO] AUTH_TRAINING: 🧹 Cleaning up processes...

@@ -52,15 +52,23 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
 
         # Initialize authenticated ICP client with server role
         try:
+            # Use the specific server identity name from environment
+            server_identity = os.getenv("ICP_CLIENT_IDENTITY_NAME", "fl_server")
+            logger.info(f"🔧 Initializing ICP client with identity: {server_identity}")
+
+            # Create ICP client with custom identity name
             self.icp_client = AuthenticatedICPClient(identity_type="server")
+            # Override the identity name to use the correct one
+            self.icp_client.identity_name = server_identity
+
             if self.icp_client.canister_id:
-                logger.info(f"Connected to ICP canister: {self.icp_client.canister_id}")
-                logger.info("Server initialized with authenticated ICP connection")
+                logger.info(f"✅ Connected to ICP canister: {self.icp_client.canister_id}")
+                logger.info(f"🔐 Server initialized with authenticated ICP connection using {server_identity}")
             else:
-                logger.warning("Could not connect to ICP canister")
+                logger.warning("⚠️  Could not connect to ICP canister")
                 self.icp_client = None
         except Exception as e:
-            logger.error(f"Failed to initialize ICP client: {e}")
+            logger.error(f"❌ Failed to initialize ICP client: {e}")
             self.icp_client = None
 
     def _verify_client_authentication(self, fit_res: fl.common.FitRes) -> bool:
@@ -81,32 +89,46 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
             # Check if fit result contains authentication error
             if hasattr(fit_res, 'metrics') and fit_res.metrics:
                 if fit_res.metrics.get('error') == 'authentication_failed':
-                    logger.error("❌ Client reported authentication failure")
+                    logger.error("🔐 CLIENT AUTHENTICATION FAILED")
+                    logger.error("   ❌ Client reported authentication failure")
                     return False
 
                 # Extract client principal ID from metrics
                 client_principal_id = fit_res.metrics.get('client_principal_id')
+                client_identity = fit_res.metrics.get('client_identity', 'unknown')
+
+                logger.info("🔐 CLIENT AUTHENTICATION CHECK")
+                logger.info(f"   🔑 Principal ID: {client_principal_id}")
+                logger.info(f"   👤 Identity: {client_identity}")
+
                 if not client_principal_id or client_principal_id == 'unknown':
-                    logger.error("❌ Client did not provide principal ID")
+                    logger.error("   ❌ Client did not provide valid principal ID")
+                    logger.error("   🚫 AUTHENTICATION REJECTED")
                     return False
 
                 # Verify client is active in the canister
-                logger.info(f"🔍 Verifying client principal ID: {client_principal_id}")
+                logger.info(f"   🔍 Verifying with canister...")
                 is_active = self.icp_client.is_client_active_by_principal(client_principal_id)
 
                 if is_active:
-                    logger.info(f"✅ Client {client_principal_id} is authenticated and approved")
+                    logger.info(f"   ✅ Client is approved in canister")
+                    logger.info(f"   🎉 AUTHENTICATION SUCCESSFUL")
                     return True
                 else:
-                    logger.error(f"❌ Client {client_principal_id} is not approved in canister")
+                    logger.error(f"   ❌ Client is not approved in canister")
+                    logger.error(f"   🚫 AUTHENTICATION REJECTED")
                     return False
 
             # If no metrics provided, reject
-            logger.error("❌ Client did not provide authentication metrics")
+            logger.error("🔐 CLIENT AUTHENTICATION FAILED")
+            logger.error("   ❌ Client did not provide authentication metrics")
+            logger.error("   🚫 AUTHENTICATION REJECTED")
             return False
 
         except Exception as e:
-            logger.error(f"❌ Error verifying client authentication: {e}")
+            logger.error("🔐 CLIENT AUTHENTICATION ERROR")
+            logger.error(f"   ❌ Error verifying client authentication: {e}")
+            logger.error("   🚫 AUTHENTICATION REJECTED")
             return False
 
     def aggregate_fit(
