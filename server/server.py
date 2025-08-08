@@ -63,6 +63,52 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
             logger.error(f"Failed to initialize ICP client: {e}")
             self.icp_client = None
 
+    def _verify_client_authentication(self, fit_res: fl.common.FitRes) -> bool:
+        """
+        Verify if client is authenticated by checking their principal ID in the canister.
+
+        Args:
+            fit_res: Fit result from client
+
+        Returns:
+            True if client is authenticated and approved, False otherwise
+        """
+        if not self.icp_client:
+            logger.warning("⚠️  No ICP client available, skipping authentication")
+            return True  # Allow if ICP is not configured
+
+        try:
+            # Check if fit result contains authentication error
+            if hasattr(fit_res, 'metrics') and fit_res.metrics:
+                if fit_res.metrics.get('error') == 'authentication_failed':
+                    logger.error("❌ Client reported authentication failure")
+                    return False
+
+                # Extract client principal ID from metrics
+                client_principal_id = fit_res.metrics.get('client_principal_id')
+                if not client_principal_id or client_principal_id == 'unknown':
+                    logger.error("❌ Client did not provide principal ID")
+                    return False
+
+                # Verify client is active in the canister
+                logger.info(f"🔍 Verifying client principal ID: {client_principal_id}")
+                is_active = self.icp_client.is_client_active_by_principal(client_principal_id)
+
+                if is_active:
+                    logger.info(f"✅ Client {client_principal_id} is authenticated and approved")
+                    return True
+                else:
+                    logger.error(f"❌ Client {client_principal_id} is not approved in canister")
+                    return False
+
+            # If no metrics provided, reject
+            logger.error("❌ Client did not provide authentication metrics")
+            return False
+
+        except Exception as e:
+            logger.error(f"❌ Error verifying client authentication: {e}")
+            return False
+
     def aggregate_fit(
         self,
         server_round: int,
@@ -101,11 +147,28 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
 
         logger.info(f"   🔧 Processing client parameters...")
 
-        # Extract parameters and weights
+        # Verify client authentication and extract parameters
         client_trees_list = []
         weights = []
+        authenticated_count = 0
 
         for client_proxy, fit_res in results:
+            # Check if client is authenticated
+            if not self._verify_client_authentication(fit_res):
+                # Get client identity for logging
+                client_id = "unknown"
+                if hasattr(fit_res, 'metrics') and fit_res.metrics:
+                    client_id = fit_res.metrics.get('client_principal_id', 'unknown')
+                logger.warning(f"❌ Rejecting unauthenticated client: {client_id}")
+                continue
+
+            authenticated_count += 1
+
+            # Get client identity for logging
+            client_id = "unknown"
+            if hasattr(fit_res, 'metrics') and fit_res.metrics:
+                client_id = fit_res.metrics.get('client_principal_id', 'unknown')
+
             # Extract parameters (should be [tree_array])
             parameters = fl.common.parameters_to_ndarrays(fit_res.parameters)
 
@@ -115,9 +178,15 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
                 serialized_trees = numpy_arrays_to_trees(tree_array)
                 client_trees_list.append(serialized_trees)
                 weights.append(fit_res.num_examples)
-                logger.info(f"Client contributed {len(serialized_trees)} trees")
+                logger.info(f"✅ Authenticated client {client_id} contributed {len(serialized_trees)} trees")
             else:
-                logger.warning(f"Client {client_proxy} provided empty parameters")
+                logger.warning(f"❌ Authenticated client {client_id} provided empty parameters")
+
+        if authenticated_count == 0:
+            logger.error("❌ No authenticated clients found. Cannot proceed with aggregation.")
+            return None, {}
+
+        logger.info(f"✅ Processed {authenticated_count}/{len(results)} authenticated clients")
 
         if not client_trees_list:
             logger.warning("No valid parameters received from clients")
@@ -185,8 +254,13 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
         # Store training round completion on ICP blockchain
         if self.icp_client:
             try:
-                # Get participant IDs (simplified - using dummy IDs for now)
-                participant_ids = [f"client_{i}" for i in range(len(results))]
+                # Get participant principal IDs from authenticated clients
+                participant_ids = []
+                for client_proxy, fit_res in results:
+                    if hasattr(fit_res, 'metrics') and fit_res.metrics:
+                        client_principal = fit_res.metrics.get('client_principal_id')
+                        if client_principal and client_principal != 'unknown':
+                            participant_ids.append(client_principal)
 
                 # Calculate accuracy (simplified - using dummy value for now)
                 accuracy = 0.85  # TODO: Calculate actual accuracy from evaluation
@@ -202,6 +276,7 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
 
                 if success:
                     logger.info(f"Training round {server_round} metadata stored on ICP blockchain")
+                    logger.info(f"Participants: {participant_ids}")
                 else:
                     logger.warning(f"Failed to store training round {server_round} metadata on ICP")
 

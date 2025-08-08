@@ -115,11 +115,21 @@ class CVDClient(fl.client.NumPyClient):
         self.client_identity = os.getenv("ICP_CLIENT_IDENTITY_NAME", "unknown_client")
         logger.info(f"🔗 Initializing client with identity: {self.client_identity}")
 
-        # Initialize authenticated ICP client
+        # Initialize authenticated ICP client and principal ID
+        self.principal_id = None
+        self.is_authenticated = False
         try:
             self.icp_client = AuthenticatedICPClient(identity_type="client")
             if self.icp_client.canister_id:
                 logger.info(f"✅ Connected to ICP canister: {self.icp_client.canister_id}")
+
+                # Get principal ID for this client
+                self.principal_id = self.icp_client.get_current_principal()
+                if self.principal_id:
+                    logger.info(f"🔑 Client principal ID: {self.principal_id}")
+                else:
+                    logger.error("❌ Failed to get principal ID")
+                    raise Exception("Cannot get principal ID")
 
                 # Get client metadata from environment
                 client_name = os.getenv("CLIENT_NAME", f"FL Client ({self.client_identity})")
@@ -140,22 +150,87 @@ class CVDClient(fl.client.NumPyClient):
 
                 if status == "success":
                     print("✅ Successfully registered and approved with ICP blockchain")
+                    self.is_authenticated = True
                 elif status == "pending":
                     print("📋 Registration submitted. Waiting for admin approval...")
                     print(f"   Client: {client_name}")
                     print(f"   Organization: {organization}")
                     print(f"   Contact: {contact_email}")
+                    print(f"   Principal ID: {self.principal_id}")
+                    print("⚠️  Client will not be able to participate in training until approved")
+                    self.is_authenticated = False
                 elif status == "already_registered":
                     print("ℹ️  Client already registered with ICP blockchain")
+                    # Check if client is approved
+                    self._verify_client_authentication()
                 else:
                     print("❌ Registration failed")
+                    self.is_authenticated = False
             else:
                 print("Warning: Could not connect to ICP canister")
                 self.icp_client = None
         except Exception as e:
             print(f"Warning: Failed to initialize ICP client: {e}")
             self.icp_client = None
-        
+
+    def _verify_client_authentication(self) -> bool:
+        """
+        Verify if client is authenticated and approved in the canister.
+
+        Returns:
+            True if client is authenticated and approved, False otherwise
+        """
+        if not self.icp_client or not self.principal_id:
+            logger.error("❌ No ICP client or principal ID available")
+            return False
+
+        try:
+            # Check if client is registered
+            is_registered = self.icp_client.is_client_registered()
+            if not is_registered:
+                logger.error("❌ Client is not registered in canister")
+                return False
+
+            # Check if client is active (approved)
+            is_active = self.icp_client.is_client_active()
+            if not is_active:
+                logger.warning("⚠️  Client is registered but not yet approved")
+                return False
+
+            logger.info("✅ Client is authenticated and approved")
+            self.is_authenticated = True
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to verify client authentication: {e}")
+            return False
+
+    def _check_authentication_before_training(self) -> bool:
+        """
+        Check authentication status before participating in training.
+
+        Returns:
+            True if client can participate, False otherwise
+        """
+        # For testing: Allow legitimate client identities when ICP is not available
+        legitimate_identities = ["fl_client_1", "fl_client_2", "fl_client_3", "hospital_a", "hospital_b", "hospital_c"]
+
+        if not self.icp_client and self.client_identity in legitimate_identities:
+            logger.info(f"🧪 Testing mode: Allowing legitimate client {self.client_identity}")
+            self.is_authenticated = True
+            return True
+
+        if not self.is_authenticated:
+            logger.error("❌ Client is not authenticated. Cannot participate in training.")
+            print("❌ Authentication required: Client must be approved by admin before training")
+            if self.principal_id:
+                print(f"   Principal ID: {self.principal_id}")
+                print("   Please contact admin to approve this client")
+            return False
+
+        # Re-verify authentication status
+        return self._verify_client_authentication()
+
     def get_parameters(self, config: Dict[str, Any]) -> List[np.ndarray]:
         """
         Get model parameters for federated learning.
@@ -182,10 +257,20 @@ class CVDClient(fl.client.NumPyClient):
         Returns:
             Tuple of (parameters, num_examples, metrics)
         """
+        # Check authentication before training
+        if not self._check_authentication_before_training():
+            logger.error("❌ Authentication failed. Refusing to participate in training.")
+            # Return empty parameters to indicate failure
+            return [np.array([])], 0, {
+                "error": "authentication_failed",
+                "client_principal_id": self.principal_id or "unknown"
+            }
+
         round_num = config.get('server_round', 'unknown')
         logger.info(f"🏋️ Starting training round {round_num}")
         logger.info(f"   📊 Training data shape: {self.X.shape}")
         logger.info(f"   🎯 Target distribution: {self.y.value_counts().to_dict()}")
+        logger.info(f"   🔑 Principal ID: {self.principal_id}")
 
         # Set parameters if provided (not first round)
         if len(parameters) >= 1 and len(parameters[0]) > 0:
@@ -200,7 +285,11 @@ class CVDClient(fl.client.NumPyClient):
         updated_parameters = self.get_parameters(config)
 
         print("Local training completed.")
-        return updated_parameters, len(self.X), {}
+        # Include principal ID in metrics for server verification
+        return updated_parameters, len(self.X), {
+            "client_principal_id": self.principal_id or "unknown",
+            "client_identity": self.client_identity
+        }
         
     def evaluate(self, parameters: List[np.ndarray], config: Dict[str, Any]) -> Tuple[float, int, Dict]:
         """
@@ -213,7 +302,17 @@ class CVDClient(fl.client.NumPyClient):
         Returns:
             Tuple of (loss, num_examples, metrics)
         """
+        # Check authentication before evaluation
+        if not self._check_authentication_before_training():
+            logger.error("❌ Authentication failed. Refusing to participate in evaluation.")
+            # Return default metrics to indicate failure
+            return 1.0, 0, {
+                "error": "authentication_failed",
+                "client_principal_id": self.principal_id or "unknown"
+            }
+
         print(f"Evaluating model for round {config.get('server_round', 'unknown')}...")
+        logger.info(f"🔑 Principal ID: {self.principal_id}")
 
         # Set parameters if provided
         if len(parameters) >= 1 and len(parameters[0]) > 0:
@@ -229,6 +328,12 @@ class CVDClient(fl.client.NumPyClient):
             metrics = {'accuracy': 0.0}
             loss = 1.0
             print("Model not trained yet, returning default metrics.")
+
+        # Include principal ID in metrics for server verification
+        metrics.update({
+            "client_principal_id": self.principal_id or "unknown",
+            "client_identity": self.client_identity
+        })
 
         return loss, len(self.X), metrics
 

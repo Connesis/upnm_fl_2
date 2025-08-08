@@ -42,21 +42,21 @@ class AuthenticatedICPClient(ICPClient):
         """
         # Load environment variables
         load_dotenv()
-        
+
         self.identity_type = identity_type
         self.principal_id = None
         self.seed_phrase = None
         self.identity_name = None
-        
+
+        # Initialize base client first
+        super().__init__(canister_name, dfx_path, icp_project_dir)
+
         # Load credentials based on identity type
         self._load_credentials()
-        
+
         # Set up dfx identity if credentials are available
         if self.principal_id and self.identity_name:
             self._setup_dfx_identity()
-        
-        # Initialize base client
-        super().__init__(canister_name, dfx_path, icp_project_dir)
 
     def _call_canister(self, method: str, args: str = "") -> Dict[str, Any]:
         """
@@ -219,6 +219,43 @@ class AuthenticatedICPClient(ICPClient):
                 return str(result).strip()
             return None
         except Exception:
+            return None
+
+    def is_client_active_by_principal(self, client_principal: str) -> bool:
+        """
+        Check if a client is active by their principal ID.
+
+        Args:
+            client_principal: The principal ID of the client to check
+
+        Returns:
+            True if client is active (approved), False otherwise
+        """
+        try:
+            result = self._call_canister("is_client_active", f'(principal "{client_principal}")')
+            return "true" in str(result).lower()
+        except Exception as e:
+            print(f"Error checking client status for {client_principal}: {e}")
+            return False
+
+    def get_client_info_by_principal(self, client_principal: str) -> Optional[Client]:
+        """
+        Get client information by their principal ID.
+
+        Args:
+            client_principal: The principal ID of the client
+
+        Returns:
+            Client object if found, None otherwise
+        """
+        try:
+            result = self._call_canister("get_client_info", f'(principal "{client_principal}")')
+            if result and "raw" not in str(result).lower():
+                # TODO: Implement proper parsing of client data
+                return None  # Simplified for now
+            return None
+        except Exception as e:
+            print(f"Error getting client info for {client_principal}: {e}")
             return None
 
     # Enhanced registration with pending status
