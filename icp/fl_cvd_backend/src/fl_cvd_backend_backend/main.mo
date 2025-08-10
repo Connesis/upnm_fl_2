@@ -48,14 +48,26 @@ actor FL_CVD_Backend {
         total_samples_contributed: Nat;
     };
 
+    public type ClientParticipation = {
+        principal_id: Principal;
+        client_name: Text;
+        dataset_filename: Text;
+        samples_contributed: Nat;
+        trees_contributed: Nat;
+    };
+
     public type ModelMetadata = {
         round_id: Nat;
         timestamp: Time.Time;
+        training_start_time: Time.Time;
+        training_end_time: Time.Time;
         num_clients: Nat;
         total_examples: Nat;
         num_trees: Nat;
         accuracy: Float;
         model_hash: Text;
+        model_filename: Text;
+        participants: [ClientParticipation];
     };
 
     public type TrainingRound = {
@@ -382,6 +394,29 @@ actor FL_CVD_Backend {
         return trainingRounds.get(roundId);
     };
 
+    public query func get_training_round_metadata(roundId: Nat) : async ?ModelMetadata {
+        return modelMetadata.get(roundId);
+    };
+
+    public query func get_all_training_rounds() : async [(Nat, TrainingRound)] {
+        return Iter.toArray(trainingRounds.entries());
+    };
+
+    public query func get_all_model_metadata() : async [(Nat, ModelMetadata)] {
+        return Iter.toArray(modelMetadata.entries());
+    };
+
+    public query func get_training_history() : async {
+        total_rounds: Nat;
+        rounds: [(Nat, ModelMetadata)];
+    } {
+        let rounds = Iter.toArray(modelMetadata.entries());
+        return {
+            total_rounds = rounds.size();
+            rounds = rounds;
+        };
+    };
+
     // Enhanced client management functions
     public shared(msg) func register_client_enhanced() : async ClientRegistrationResult {
         let clientId = msg.caller;
@@ -473,9 +508,7 @@ actor FL_CVD_Backend {
         return modelMetadata.get(roundId);
     };
 
-    public query func get_all_model_metadata() : async [(Nat, ModelMetadata)] {
-        Iter.toArray(modelMetadata.entries());
-    };
+
 
     // Training round management enhancements
     public shared func update_round_status(roundId: Nat, newStatus: RoundStatus) : async Bool {
@@ -498,33 +531,43 @@ actor FL_CVD_Backend {
         };
     };
 
-    public shared func complete_training_round(
+    public shared func complete_training_round_enhanced(
         roundId: Nat,
-        participants: [Principal],
+        participants: [ClientParticipation],
         totalExamples: Nat,
         numTrees: Nat,
         accuracy: Float,
-        modelHash: Text
+        modelHash: Text,
+        modelFilename: Text,
+        trainingStartTime: Time.Time,
+        trainingEndTime: Time.Time
     ) : async Bool {
         switch (trainingRounds.get(roundId)) {
             case (?round) {
-                // Create metadata
+                // Create enhanced metadata
                 let metadata: ModelMetadata = {
                     round_id = roundId;
                     timestamp = Time.now();
+                    training_start_time = trainingStartTime;
+                    training_end_time = trainingEndTime;
                     num_clients = participants.size();
                     total_examples = totalExamples;
                     num_trees = numTrees;
                     accuracy = accuracy;
                     model_hash = modelHash;
+                    model_filename = modelFilename;
+                    participants = participants;
                 };
+
+                // Extract principal IDs for the training round
+                let principalIds = Array.map<ClientParticipation, Principal>(participants, func(p) = p.principal_id);
 
                 // Update training round
                 let updatedRound: TrainingRound = {
                     id = round.id;
                     timestamp = round.timestamp;
-                    model_file = round.model_file;
-                    participants = participants;
+                    model_file = modelFilename;
+                    participants = principalIds;
                     status = #Completed;
                     metadata = ?metadata;
                 };
@@ -533,8 +576,8 @@ actor FL_CVD_Backend {
                 modelMetadata.put(roundId, metadata);
 
                 // Update participant statistics
-                for (participantId in participants.vals()) {
-                    switch (clients.get(participantId)) {
+                for (participant in participants.vals()) {
+                    switch (clients.get(participant.principal_id)) {
                         case (?client) {
                             let updatedClient: Client = {
                                 id = client.id;
@@ -542,9 +585,9 @@ actor FL_CVD_Backend {
                                 last_active = Time.now();
                                 status = client.status;
                                 total_rounds_participated = client.total_rounds_participated + 1;
-                                total_samples_contributed = client.total_samples_contributed + (totalExamples / participants.size());
+                                total_samples_contributed = client.total_samples_contributed + participant.samples_contributed;
                             };
-                            clients.put(participantId, updatedClient);
+                            clients.put(participant.principal_id, updatedClient);
                         };
                         case null {};
                     };

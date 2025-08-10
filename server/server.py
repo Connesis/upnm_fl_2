@@ -5,6 +5,7 @@ import flwr as fl
 import argparse
 import sys
 import os
+import time
 import joblib
 from datetime import datetime
 from typing import List, Tuple, Dict, Any, Optional
@@ -273,37 +274,97 @@ class CVDFedAvgStrategy(fl.server.strategy.FedAvg):
         }
         model_path, metadata_path = self._save_global_model(aggregated_trees, server_round, metadata)
 
-        # Store training round completion on ICP blockchain
+        # Store enhanced training round completion on ICP blockchain
         if self.icp_client:
             try:
-                # Get participant principal IDs from authenticated clients
-                participant_ids = []
+                # Start training round first if this is the first time
+                participant_principal_ids = []
                 for client_proxy, fit_res in results:
                     if hasattr(fit_res, 'metrics') and fit_res.metrics:
                         client_principal = fit_res.metrics.get('client_principal_id')
                         if client_principal and client_principal != 'unknown':
-                            participant_ids.append(client_principal)
+                            participant_principal_ids.append(client_principal)
+
+                # Start the training round
+                round_id = self.icp_client.start_training_round(participant_principal_ids)
+                if not round_id:
+                    logger.warning(f"⚠️  Failed to start training round {server_round}")
+                    # Use the server_round as fallback
+                    round_id = server_round
+                else:
+                    logger.info(f"✅ Started training round {round_id} on ICP blockchain")
+
+                # Collect detailed participant information
+                participants = []
+                training_start_time = int(time.time() * 1000000000)  # Current time in nanoseconds
+
+                for client_proxy, fit_res in results:
+                    if hasattr(fit_res, 'metrics') and fit_res.metrics:
+                        client_principal = fit_res.metrics.get('client_principal_id')
+                        client_identity = fit_res.metrics.get('client_identity', 'unknown')
+
+                        if client_principal and client_principal != 'unknown':
+                            # Extract client information
+                            client_name = os.getenv('CLIENT_NAME', f'Client_{client_identity}')
+                            dataset_filename = "unknown"  # Will be enhanced later
+                            samples_contributed = fit_res.num_examples
+                            trees_contributed = 50  # Based on our configuration
+
+                            # Try to get more detailed client info from environment or metrics
+                            if hasattr(fit_res, 'metrics') and fit_res.metrics:
+                                client_name = fit_res.metrics.get('client_name', client_name)
+                                dataset_filename = fit_res.metrics.get('dataset_filename', dataset_filename)
+
+                            participants.append({
+                                'principal_id': client_principal,
+                                'client_name': client_name,
+                                'dataset_filename': dataset_filename,
+                                'samples_contributed': samples_contributed,
+                                'trees_contributed': trees_contributed
+                            })
 
                 # Calculate accuracy (simplified - using dummy value for now)
                 accuracy = 0.85  # TODO: Calculate actual accuracy from evaluation
 
-                success = self.icp_client.complete_training_round(
-                    round_id=server_round,
-                    participants=participant_ids,
+                # Extract model filename from path
+                model_filename = os.path.basename(model_path) if model_path else f"model_round_{server_round}.joblib"
+                training_end_time = int(time.time() * 1000000000)  # Current time in nanoseconds
+
+                logger.info("📊 STORING ENHANCED TRAINING ROUND METADATA")
+                logger.info(f"   🔄 Round: {server_round}")
+                logger.info(f"   👥 Participants: {len(participants)}")
+                logger.info(f"   📁 Model: {model_filename}")
+                logger.info(f"   📈 Accuracy: {accuracy}")
+                logger.info(f"   🌳 Trees: {len(aggregated_trees)}")
+                logger.info(f"   📊 Examples: {total_examples}")
+
+                # Use enhanced method to store comprehensive metadata
+                success = self.icp_client.complete_training_round_enhanced(
+                    round_id=round_id,
+                    participants=participants,
                     total_examples=total_examples,
                     num_trees=len(aggregated_trees),
                     accuracy=accuracy,
-                    model_path=model_path
+                    model_path=model_path,
+                    model_filename=model_filename,
+                    training_start_time=training_start_time,
+                    training_end_time=training_end_time
                 )
 
                 if success:
-                    logger.info(f"Training round {server_round} metadata stored on ICP blockchain")
-                    logger.info(f"Participants: {participant_ids}")
+                    logger.info("✅ ENHANCED METADATA STORED ON ICP BLOCKCHAIN")
+                    logger.info(f"   📋 Round {server_round} metadata includes:")
+                    for i, p in enumerate(participants, 1):
+                        logger.info(f"      {i}. {p['client_name']} ({p['principal_id'][:8]}...)")
+                        logger.info(f"         Dataset: {p['dataset_filename']}")
+                        logger.info(f"         Samples: {p['samples_contributed']}, Trees: {p['trees_contributed']}")
                 else:
-                    logger.warning(f"Failed to store training round {server_round} metadata on ICP")
+                    logger.warning(f"⚠️  Failed to store enhanced metadata for round {server_round}")
 
             except Exception as e:
-                logger.error(f"Error storing training round metadata on ICP: {e}")
+                logger.error(f"❌ Error storing enhanced training round metadata: {e}")
+                import traceback
+                logger.error(f"   Traceback: {traceback.format_exc()}")
 
         # Output the generated artifact file names and completion status
         print("\n" + "="*80)

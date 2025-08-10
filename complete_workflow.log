@@ -1,0 +1,12 @@
+2025-08-10 15:55:23,629 [INFO] COMPLETE_WORKFLOW: 🚀 Complete Workflow Manager Initialized
+2025-08-10 15:55:23,629 [INFO] COMPLETE_WORKFLOW:    Server Identity: fl_server
+2025-08-10 15:55:23,630 [INFO] COMPLETE_WORKFLOW:    Client Identities: ['fl_client_1', 'fl_client_2', 'fl_client_3']
+2025-08-10 15:55:23,630 [INFO] COMPLETE_WORKFLOW: 🎯 STARTING COMPLETE FEDERATED LEARNING WORKFLOW
+2025-08-10 15:55:23,630 [INFO] COMPLETE_WORKFLOW: ================================================================================
+2025-08-10 15:55:23,631 [INFO] COMPLETE_WORKFLOW: 
+==================== STEP 1: CLEAN AND START LOCALNET ====================
+2025-08-10 15:55:23,631 [INFO] COMPLETE_WORKFLOW: 🧹 STEP 1: Cleaning and starting ICP local network...
+2025-08-10 15:55:23,631 [INFO] COMPLETE_WORKFLOW:    Stopping existing dfx processes...
+2025-08-10 15:55:26,359 [INFO] COMPLETE_WORKFLOW:    Cleaning dfx state...
+2025-08-10 15:56:26,371 [ERROR] COMPLETE_WORKFLOW: ❌ dfx start timed out
+2025-08-10 15:56:26,373 [ERROR] COMPLETE_WORKFLOW: ❌ Step 1 failed: Clean and Start LocalNet

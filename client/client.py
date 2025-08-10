@@ -98,7 +98,7 @@ def wait_for_server(server_address: str, max_wait_time: int = 300, retry_interva
 class CVDClient(fl.client.NumPyClient):
     """Flower client for cardiovascular disease prediction with ICP integration."""
 
-    def __init__(self, model: CVDModel, X: pd.DataFrame, y: pd.Series):
+    def __init__(self, model: CVDModel, X: pd.DataFrame, y: pd.Series, dataset_path: str = None):
         """
         Initialize the client with model and data.
 
@@ -106,10 +106,12 @@ class CVDClient(fl.client.NumPyClient):
             model: CVDModel instance
             X: Features DataFrame
             y: Target Series
+            dataset_path: Path to the dataset file
         """
         self.model = model
         self.X = X
         self.y = y
+        self.dataset_path = dataset_path
 
         # Get client identity from environment
         self.client_identity = os.getenv("ICP_CLIENT_IDENTITY_NAME", "unknown_client")
@@ -306,10 +308,14 @@ class CVDClient(fl.client.NumPyClient):
         logger.info("✅ LOCAL TRAINING COMPLETED")
         logger.info("📤 Sending parameters and authentication info to server...")
 
-        # Include principal ID in metrics for server verification
+        # Include comprehensive metadata for server verification and storage
         return updated_parameters, len(self.X), {
             "client_principal_id": self.principal_id or "unknown",
-            "client_identity": self.client_identity
+            "client_identity": self.client_identity,
+            "client_name": os.getenv("CLIENT_NAME", f"Client_{self.client_identity}"),
+            "dataset_filename": os.path.basename(self.dataset_path) if hasattr(self, 'dataset_path') else "unknown.csv",
+            "client_organization": os.getenv("CLIENT_ORGANIZATION", "Unknown Organization"),
+            "client_location": os.getenv("CLIENT_LOCATION", "Unknown Location")
         }
         
     def evaluate(self, parameters: List[np.ndarray], config: Dict[str, Any]) -> Tuple[float, int, Dict]:
@@ -350,10 +356,14 @@ class CVDClient(fl.client.NumPyClient):
             loss = 1.0
             print("Model not trained yet, returning default metrics.")
 
-        # Include principal ID in metrics for server verification
+        # Include comprehensive metadata for server verification and storage
         metrics.update({
             "client_principal_id": self.principal_id or "unknown",
-            "client_identity": self.client_identity
+            "client_identity": self.client_identity,
+            "client_name": os.getenv("CLIENT_NAME", f"Client_{self.client_identity}"),
+            "dataset_filename": os.path.basename(self.dataset_path) if self.dataset_path else "unknown.csv",
+            "client_organization": os.getenv("CLIENT_ORGANIZATION", "Unknown Organization"),
+            "client_location": os.getenv("CLIENT_LOCATION", "Unknown Location")
         })
 
         return loss, len(self.X), metrics
@@ -400,8 +410,8 @@ def main(dataset_path: str, max_wait_time: int = 300, retry_interval: int = 5, n
     logger.info(f"🌳 Initializing model with {n_estimators} trees per client")
     model = CVDModel(n_estimators=n_estimators)
 
-    # Create client
-    client = CVDClient(model, X, y)
+    # Create client with dataset path for metadata
+    client = CVDClient(model, X, y, dataset_path)
 
     # Wait for server to become available
     logger.info(f"🔍 Attempting to connect to server at {server_address}")

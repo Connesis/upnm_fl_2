@@ -221,23 +221,76 @@ class ICPClient:
         except Exception:
             return None
     
-    def complete_training_round(self, round_id: int, participants: List[str], 
-                              total_examples: int, num_trees: int, 
+    def complete_training_round(self, round_id: int, participants: List[str],
+                              total_examples: int, num_trees: int,
                               accuracy: float, model_path: str) -> bool:
-        """Complete a training round with metadata."""
+        """Complete a training round with basic metadata (legacy method)."""
         try:
             # Calculate model hash
             model_hash = self._calculate_file_hash(model_path) if os.path.exists(model_path) else "unknown"
-            
-            # Format arguments
+
+            # Format arguments (using commas for Candid syntax)
             participants_str = "vec {" + "; ".join([f'principal "{p}"' for p in participants]) + "}"
-            args = f"({round_id}; {participants_str}; {total_examples}; {num_trees}; {accuracy}; \"{model_hash}\")"
-            
+            args = f"({round_id}, {participants_str}, {total_examples}, {num_trees}, {accuracy}, \"{model_hash}\")"
+
             result = self._call_canister("complete_training_round", args)
             return "true" in str(result).lower()
         except Exception:
             return False
-    
+
+    def start_training_round(self, participants: List[str]) -> Optional[int]:
+        """Start a new training round with the given participants."""
+        try:
+            # Format participant principal IDs
+            participants_str = "vec {" + "; ".join([f'principal "{p}"' for p in participants]) + "}"
+            args = f"({participants_str})"
+
+            result = self._call_canister("start_training_round", args)
+            # Parse the result to get the round ID
+            if result and "opt" in str(result):
+                # Extract round ID from result like "(opt (1 : nat))"
+                result_str = str(result)
+                if "opt" in result_str and "nat" in result_str:
+                    # Simple parsing - extract number
+                    import re
+                    match = re.search(r'(\d+)', result_str)
+                    if match:
+                        return int(match.group(1))
+            return None
+        except Exception as e:
+            print(f"Error starting training round: {e}")
+            return None
+
+    def complete_training_round_enhanced(self, round_id: int, participants: List[Dict],
+                                       total_examples: int, num_trees: int,
+                                       accuracy: float, model_path: str, model_filename: str,
+                                       training_start_time: int, training_end_time: int) -> bool:
+        """Complete a training round with enhanced metadata."""
+        try:
+            # Calculate model hash
+            model_hash = self._calculate_file_hash(model_path) if os.path.exists(model_path) else "unknown"
+
+            # Format participant data
+            participants_str = "vec {" + "; ".join([
+                f"record {{ principal_id = principal \"{p['principal_id']}\"; "
+                f"client_name = \"{p['client_name']}\"; "
+                f"dataset_filename = \"{p['dataset_filename']}\"; "
+                f"samples_contributed = {p['samples_contributed']}; "
+                f"trees_contributed = {p['trees_contributed']} }}"
+                for p in participants
+            ]) + "}"
+
+            # Format arguments (using commas for Candid syntax)
+            args = (f"({round_id}, {participants_str}, {total_examples}, {num_trees}, "
+                   f"{accuracy}, \"{model_hash}\", \"{model_filename}\", "
+                   f"{training_start_time}, {training_end_time})")
+
+            result = self._call_canister("complete_training_round_enhanced", args)
+            return "true" in str(result).lower()
+        except Exception as e:
+            print(f"Error completing enhanced training round: {e}")
+            return False
+
     def get_training_round(self, round_id: int) -> Optional[TrainingRound]:
         """Get information about a specific training round."""
         try:
@@ -246,7 +299,81 @@ class ICPClient:
             return None
         except Exception:
             return None
-    
+
+    def get_training_round_metadata(self, round_id: int) -> Optional[Dict]:
+        """Get detailed metadata for a specific training round."""
+        try:
+            result = self._call_canister("get_training_round_metadata", f"({round_id})")
+            # TODO: Implement proper parsing of metadata
+            return {"raw_result": str(result)}
+        except Exception as e:
+            print(f"Error getting training round metadata: {e}")
+            return None
+
+    def get_training_history(self) -> Optional[Dict]:
+        """Get complete training history with metadata."""
+        try:
+            result = self._call_canister("get_training_history", "()")
+            # TODO: Implement proper parsing of training history
+            return {"raw_result": str(result)}
+        except Exception as e:
+            print(f"Error getting training history: {e}")
+            return None
+
+    def get_all_model_metadata(self) -> Optional[Dict]:
+        """Get all model metadata from all training rounds."""
+        try:
+            result = self._call_canister("get_all_model_metadata", "()")
+            # TODO: Implement proper parsing of metadata array
+            return {"raw_result": str(result)}
+        except Exception as e:
+            print(f"Error getting all model metadata: {e}")
+            return None
+
+    def verify_model_hash(self, round_id: int, model_file_path: str) -> bool:
+        """Verify model file hash against stored hash in canister."""
+        try:
+            # Get stored metadata
+            metadata = self.get_training_round_metadata(round_id)
+            if not metadata:
+                print(f"No metadata found for round {round_id}")
+                return False
+
+            # Parse stored hash from metadata
+            import re
+            metadata_str = metadata["raw_result"]
+            hash_pattern = r'model_hash = "([a-f0-9]{64})"'
+            match = re.search(hash_pattern, metadata_str)
+
+            if not match:
+                print(f"Could not parse stored hash for round {round_id}")
+                return False
+
+            stored_hash = match.group(1)
+
+            # Calculate actual file hash
+            calculated_hash = self._calculate_file_hash(model_file_path)
+            if not calculated_hash:
+                print(f"Could not calculate hash for file: {model_file_path}")
+                return False
+
+            # Compare hashes
+            verified = (stored_hash == calculated_hash)
+
+            if verified:
+                print(f"✅ Model hash verified for round {round_id}")
+                print(f"   Hash: {stored_hash[:16]}...{stored_hash[-8:]}")
+            else:
+                print(f"❌ Model hash verification FAILED for round {round_id}")
+                print(f"   Stored:    {stored_hash}")
+                print(f"   Calculated: {calculated_hash}")
+
+            return verified
+
+        except Exception as e:
+            print(f"Error verifying model hash: {e}")
+            return False
+
     def get_system_stats(self) -> Optional[SystemStats]:
         """Get system statistics."""
         try:
