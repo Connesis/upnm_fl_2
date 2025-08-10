@@ -98,21 +98,31 @@ class ICPClient:
         except subprocess.CalledProcessError:
             return None
     
-    def _call_canister(self, method: str, args: str = "") -> Dict[str, Any]:
+    def _call_canister(self, method: str, args: str = "", network: str = "local", identity: str = None) -> Dict[str, Any]:
         """
         Call a canister method and return the result.
-        
+
         Args:
             method: The method name to call
             args: Arguments to pass to the method
-            
+            network: Network to use ("local" or "ic")
+            identity: Identity to use for the call
+
         Returns:
             Parsed result from the canister call
         """
         cmd = [self.dfx_path, "canister", "call", self.canister_name, method]
         if args:
             cmd.append(args)
-        
+
+        # Add network parameter if not local
+        if network != "local":
+            cmd.extend(["--network", network])
+
+        # Add identity parameter if specified
+        if identity:
+            cmd.extend(["--identity", identity])
+
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=self.icp_project_dir)
             # Parse the Candid output (simplified parsing)

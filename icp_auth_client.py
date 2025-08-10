@@ -47,6 +47,7 @@ class AuthenticatedICPClient(ICPClient):
         self.principal_id = None
         self.seed_phrase = None
         self.identity_name = None
+        self.network = os.getenv("ICP_NETWORK", "local")
 
         # Initialize base client first
         super().__init__(canister_name, dfx_path, icp_project_dir)
@@ -70,6 +71,10 @@ class AuthenticatedICPClient(ICPClient):
             Parsed result from the canister call
         """
         cmd = [self.dfx_path, "canister", "call"]
+
+        # Add network parameter if not local
+        if self.network != "local":
+            cmd.extend(["--network", self.network])
 
         # Add identity parameter if we have an identity name
         if self.identity_name:

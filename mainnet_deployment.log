@@ -1,0 +1,11 @@
+2025-08-10 16:49:24,731 [INFO] 🌐 Mainnet Canister Deployer Initialized
+2025-08-10 16:49:24,732 [INFO]    Identity: fl_server
+2025-08-10 16:49:24,732 [INFO]    Network: ic
+2025-08-10 16:49:24,732 [INFO] 🌐 STARTING MAINNET CANISTER DEPLOYMENT
+2025-08-10 16:49:24,733 [INFO] ============================================================
+2025-08-10 16:49:24,733 [INFO] 🔍 Checking deployment prerequisites...
+2025-08-10 16:49:24,968 [INFO]    ✅ Identity: fl_server
+2025-08-10 16:49:24,968 [INFO]    📋 Principal: d5mfv-oefjt-6bphj-2hody-nzrw2-6dlny-cyqpq-kb3h4-sambi-eflno-xae
+2025-08-10 16:49:25,544 [ERROR]    ❌ No cycles wallet configured
+2025-08-10 16:49:25,545 [INFO]    💡 Set up wallet with: dfx identity set-wallet <wallet-id> --identity fl_server --network ic
+2025-08-10 16:49:25,545 [ERROR] ❌ Prerequisites not met
