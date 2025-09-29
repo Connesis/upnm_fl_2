@@ -27,7 +27,7 @@ export ICP_CANISTER_ID="bkyz2-fmaaa-aaaaa-qaaaq-cai"
 
 # set to "ic" for mainnet
 export ICP_NETWORK="local"
-export MIN_CLIENTS=1
+export MIN_CLIENTS=3
 export ROUNDS=2
 
 echo "Starting federated learning server with:"
