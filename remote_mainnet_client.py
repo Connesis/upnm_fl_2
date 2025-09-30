@@ -82,6 +82,16 @@ class RemoteMainnetClient:
         else:
             print("❌ Failed to get training history")
     
+    def get_all_model_metadata(self) -> None:
+        """Get training history from mainnet canister."""
+        print("📋 Querying All Model Metadata...")
+        result = self.call_canister("get_all_model_metadata")
+        if result:
+            print("✅ All Models Metadata:")
+            print(result)
+        else:
+            print("❌ Failed to get all models metadata")
+
     def get_training_round_metadata(self, round_id: int) -> None:
         """Get metadata for specific training round."""
         print(f"🔍 Querying Round {round_id} Metadata...")
@@ -174,7 +184,7 @@ Examples:
     parser.add_argument("--network", default="ic",
                        help="Network (ic for mainnet)")
     parser.add_argument("--action", required=True,
-                       choices=["stats", "history", "round", "register", "client-status", "methods"],
+                       choices=["stats", "history", "get-all-model-metadata", "round", "register", "client-status", "methods"],
                        help="Action to perform")
     parser.add_argument("--round-id", type=int,
                        help="Round ID for round metadata query")
@@ -196,6 +206,8 @@ Examples:
         client.get_system_stats()
     elif args.action == "history":
         client.get_training_history()
+    elif args.action == "get-all-model-metadata":
+        client.get_all_model_metadata()
     elif args.action == "round":
         if args.round_id is None:
             print("❌ --round-id required for round metadata query")
