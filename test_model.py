@@ -17,18 +17,27 @@ import seaborn as sns
 def load_test_data(test_data_path):
     """Load and prepare test data."""
     try:
-        test_data = pd.read_csv(test_data_path)
+        # Auto-detect delimiter (could be ',' or ';')
+        with open(test_data_path, 'r') as f:
+            first_line = f.readline()
+            delimiter = ';' if ';' in first_line else ','
+
+        test_data = pd.read_csv(test_data_path, sep=delimiter)
         print(f"✅ Loaded test data: {test_data_path}")
         print(f"   Shape: {test_data.shape}")
-        
-        # Check if target column exists
-        if 'target' not in test_data.columns:
-            print("❌ Error: 'target' column not found in test data")
+        print(f"   Columns: {test_data.columns}")
+
+        # Check if target column exists (cardio or target)
+        target_col = 'cardio' if 'cardio' in test_data.columns else 'target'
+
+        if target_col not in test_data.columns:
+            print("❌ Error: 'cardio' or 'target' column not found in test data")
+            print(f"   Available columns: {list(test_data.columns)}")
             return None, None
-        
+
         # Prepare features and labels
-        X_test = test_data.drop(['target'], axis=1)
-        y_test = test_data['target']
+        X_test = test_data.drop([target_col], axis=1)
+        y_test = test_data[target_col]
         
         print(f"   Features: {X_test.shape[1]}")
         print(f"   Samples: {len(y_test)}")

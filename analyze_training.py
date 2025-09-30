@@ -38,17 +38,25 @@ def extract_round_info(filename):
 def test_model_accuracy(model, test_data_path):
     """Test model accuracy on validation data."""
     try:
+        # Auto-detect delimiter (could be ',' or ';')
+        with open(test_data_path, 'r') as f:
+            first_line = f.readline()
+            delimiter = ';' if ';' in first_line else ','
+
         # Load test data
-        test_data = pd.read_csv(test_data_path)
-        X_test = test_data.drop(['target'], axis=1)
-        y_test = test_data['target']
-        
+        test_data = pd.read_csv(test_data_path, sep=delimiter)
+
+        # Prepare features and labels
+        target_col = 'cardio' if 'cardio' in test_data.columns else 'target'
+        X_test = test_data.drop([target_col], axis=1)
+        y_test = test_data[target_col]
+
         # Make predictions
         y_pred = model.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
-        
+
         return accuracy
-        
+
     except Exception as e:
         print(f"⚠️ Warning: Could not test model accuracy: {e}")
         return None
